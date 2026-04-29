@@ -12,7 +12,17 @@ const dataFile = process.env.DATA_FILE || path.join(root, "tool-register-data.js
 const types = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".json":"application/json; charset=utf-8", ".png":"image/png" };
 
 const DEFAULT_USERS = [
-  { email: "desmond.trinidad@byrnecut.com.au", name: "Desmond Trinidad", role: "main", password: "060225" }
+  { email: "desmond.trinidad@byrnecut.com.au", name: "Desmond Trinidad", role: "main", password: "060225" },
+  { email: "james.tepairi@byrnecut.com.au", name: "James Tepairi", role: "admin", password: "281097" },
+  { email: "brian.stimson@byrnecut.com.au", name: "Brian Stimson", role: "admin", password: "375867" },
+  { email: "jorden.d'ippolito@byrnecut.com.au", name: "Jorden D'Ippolito", role: "admin", password: "617635" },
+  { email: "trevor.martin@byrnecut.com.au", name: "Trevor Martin", role: "admin", password: "123456" },
+  { email: "thomas.ooi@byrnecut.com.au", name: "Thomas Ooi", role: "admin", password: "123456" },
+  { email: "glenn.mays@byrnecut.com.au", name: "Glenn Mays", role: "storeman", password: "123456" },
+  { email: "anthony.kandie@byrnecut.com.au", name: "Anthony Kandie", role: "storeman", password: "123456" },
+  { email: "kai.macvicar@byrnecut.com.au", name: "Kai Macvicar", role: "storeman", password: "123456" },
+  { email: "michael.frausin@byrnecut.com.au", name: "Michael Frausin", role: "storeman", password: "123456" },
+  { email: "jordan.sbrana@byrnecut.com.au", name: "Jordan Sbrana", role: "storeman", password: "123456" }
 ];
 
 function readJsonJs(file, prefix) {
@@ -57,8 +67,13 @@ function normaliseUsers(users) {
     name: String(user.name || "").trim() || String(user.email || "").trim().toLowerCase(),
     role: ["main","admin","storeman"].includes(String(user.role || "").toLowerCase()) ? String(user.role).toLowerCase() : "storeman",
     password: String(user.password || "").trim()
-  })).filter(user => user.email && user.password).filter(user => { if (seen.has(user.email)) return false; seen.add(user.email); return true; });
-  if (!clean.some(u => u.email === DEFAULT_USERS[0].email)) clean.unshift(DEFAULT_USERS[0]);
+  })).filter(user => user.email && /^\d{6}$/.test(user.password)).filter(user => { if (seen.has(user.email)) return false; seen.add(user.email); return true; });
+  DEFAULT_USERS.forEach(user => {
+    if (!seen.has(user.email)) {
+      clean.push(user);
+      seen.add(user.email);
+    }
+  });
   return clean;
 }
 
@@ -106,7 +121,12 @@ function buildTransport() {
   return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true", auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || "" } : undefined });
 }
 async function sendMovementEmail(state, movement, asset) {
-  const recipients = (state.settings?.foremanEmails || process.env.FOREMAN_EMAILS || "").split(/[,\n;]/).map(e=>e.trim()).filter(Boolean);
+  const configuredRecipients = (state.settings?.foremanEmails || process.env.FOREMAN_EMAILS || "").split(/[,\n;]/).map(e=>e.trim()).filter(Boolean);
+  const loginRecipients = (state.settings?.users || [])
+    .filter(user => ["main", "admin", "storeman"].includes(user.role))
+    .map(user => user.email)
+    .filter(Boolean);
+  const recipients = [...new Set([...configuredRecipients, ...loginRecipients].map(email => email.toLowerCase()))];
   const transport = buildTransport(); if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
   const action = movement.type === "checkout" ? "logged out" : movement.type === "repair" ? "sent for repair" : "returned";
   const siteName = state.settings?.siteName || "Jundee";
@@ -124,6 +144,19 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/state") {
     const ctx = requireUser(req, res); if (!ctx) return;
     return sendJson(res, 200, publicState(ctx.state, ctx.user.role === "main"));
+  }
+  if (req.method === "POST" && url.pathname === "/api/change-pin") {
+    const ctx = requireUser(req, res); if (!ctx) return;
+    const body = await readBody(req);
+    const currentPin = String(body.currentPin || "").trim();
+    const newPin = String(body.newPin || "").trim();
+    if (!/^\d{6}$/.test(currentPin) || !/^\d{6}$/.test(newPin)) return sendJson(res, 400, { error:"PINs must be exactly 6 digits" });
+    if (ctx.user.password !== currentPin) return sendJson(res, 400, { error:"Current PIN is incorrect" });
+    const user = ctx.state.settings.users.find(item => item.email === ctx.user.email);
+    if (!user) return sendJson(res, 404, { error:"Login not found" });
+    user.password = newPin;
+    writeState(ctx.state);
+    return sendJson(res, 200, { user: publicUser(user), state: publicState(ctx.state, user.role === "main") });
   }
   if (req.method === "POST" && url.pathname === "/api/move") {
     const ctx = requireUser(req, res, ["main","admin","storeman"]); if (!ctx) return;

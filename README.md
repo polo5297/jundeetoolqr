@@ -20,6 +20,7 @@ http://localhost:4173
 
 - Starts with the registered Jundee Milwaukee tooling from `milwaukee reg jundee.xlsx`.
 - Opens to a login screen before the register is shown.
+- Allows signed-in users to change their own 6-digit PIN.
 - Add tools with their own asset number, name, category, and home location.
 - Generate printable QR labels for every tool.
 - Scan a QR code or type the asset number.
@@ -49,7 +50,6 @@ npm start
 Environment variables:
 
 ```text
-ADMIN_PIN=choose-a-secure-pin
 SMTP_HOST=your-mail-server
 SMTP_PORT=587
 SMTP_USER=your-email-login
@@ -66,16 +66,7 @@ For permanent storage on Render, add a persistent disk and set `DATA_FILE` to a 
 
 The register saves data in the browser on this computer. Use **Export backup** regularly if the register matters operationally.
 
-Default main login for first setup:
-
-```text
-desmond.trinidad@byrnecut.com.au
-060225
-```
-
 When hosted on Render, the register saves to the server data file instead of only this browser.
-
-The default local admin PIN is `1234`. On Render, set `ADMIN_PIN` in the environment variables.
 
 QR rendering uses the `qrcodejs` browser library from jsDelivr. If the computer is offline, the register still works, but QR images may not render until the page has internet access.
 

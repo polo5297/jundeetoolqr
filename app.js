@@ -1,5 +1,17 @@
 const STORE_KEY = "toolQrRegister.v2";
-const DEFAULT_USERS = [{ email: "desmond.trinidad@byrnecut.com.au", name: "Desmond Trinidad", role: "main", password: "060225" }];
+const DEFAULT_USERS = [
+  { email: "desmond.trinidad@byrnecut.com.au", name: "Desmond Trinidad", role: "main", password: "060225" },
+  { email: "james.tepairi@byrnecut.com.au", name: "James Tepairi", role: "admin", password: "281097" },
+  { email: "brian.stimson@byrnecut.com.au", name: "Brian Stimson", role: "admin", password: "375867" },
+  { email: "jorden.d'ippolito@byrnecut.com.au", name: "Jorden D'Ippolito", role: "admin", password: "617635" },
+  { email: "trevor.martin@byrnecut.com.au", name: "Trevor Martin", role: "admin", password: "123456" },
+  { email: "thomas.ooi@byrnecut.com.au", name: "Thomas Ooi", role: "admin", password: "123456" },
+  { email: "glenn.mays@byrnecut.com.au", name: "Glenn Mays", role: "storeman", password: "123456" },
+  { email: "anthony.kandie@byrnecut.com.au", name: "Anthony Kandie", role: "storeman", password: "123456" },
+  { email: "kai.macvicar@byrnecut.com.au", name: "Kai Macvicar", role: "storeman", password: "123456" },
+  { email: "michael.frausin@byrnecut.com.au", name: "Michael Frausin", role: "storeman", password: "123456" },
+  { email: "jordan.sbrana@byrnecut.com.au", name: "Jordan Sbrana", role: "storeman", password: "123456" }
+];
 const DEFAULT_SETTINGS = { foremanEmails: "", siteName: "Jundee", workers: [], users: DEFAULT_USERS };
 const IS_SERVER = location.protocol.startsWith("http");
 let currentUser = null;
@@ -11,7 +23,7 @@ const state = loadState();
 const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
-  ["loginScreen","appShell","loginForm","loginEmail","loginPassword","loginMessage","currentUser","logoutButton","adminToggle","adminPanel","assetForm","settingsForm","usersForm","checkoutForm","assetTable","historyList","assetLookup","lookupResult","personName","movementNotes","scannerStatus","scannerVideo","searchBox","foremanEmails","siteName","workerList","workersList","workerCount","usersList","labelSheet","scanButton","returnButton","repairButton","sampleData","printLabels","exportData","importData","clearHistory"].forEach(id => els[id] = document.querySelector(`#${id}`));
+  ["loginScreen","appShell","loginForm","loginEmail","loginPassword","loginMessage","currentUser","logoutButton","pinToggle","pinPanel","pinForm","currentPin","newPin","confirmPin","pinMessage","adminToggle","adminPanel","assetForm","settingsForm","usersForm","checkoutForm","assetTable","historyList","assetLookup","lookupResult","personName","movementNotes","scannerStatus","scannerVideo","searchBox","foremanEmails","siteName","workerList","workersList","workerCount","usersList","labelSheet","scanButton","returnButton","repairButton","sampleData","printLabels","exportData","importData","clearHistory"].forEach(id => els[id] = document.querySelector(`#${id}`));
   bindEvents();
   restoreLogin();
   render();
@@ -20,6 +32,8 @@ document.addEventListener("DOMContentLoaded", () => {
 function bindEvents() {
   els.loginForm.addEventListener("submit", login);
   els.logoutButton.addEventListener("click", logout);
+  els.pinToggle.addEventListener("click", () => { els.pinPanel.hidden = !els.pinPanel.hidden; });
+  els.pinForm.addEventListener("submit", changePin);
   els.adminToggle.addEventListener("click", () => { els.adminPanel.hidden = !els.adminPanel.hidden; });
   els.assetForm.addEventListener("submit", saveAsset);
   els.settingsForm.addEventListener("submit", saveSettings);
@@ -49,7 +63,7 @@ function persist() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 function getDefaultWorkers() { return uniqueList(Array.isArray(window.AUTHORISED_WORKERS) ? window.AUTHORISED_WORKERS : []); }
 function uniqueList(list) { const seen = new Set(); return (Array.isArray(list) ? list : []).map(x => String(x || "").trim()).filter(Boolean).filter(x => { const k = x.toLowerCase().replace(/\s+/g," "); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>a.localeCompare(b)); }
 function normaliseSettings(settings) { return { ...DEFAULT_SETTINGS, ...settings, workers: uniqueList(settings.workers?.length ? settings.workers : getDefaultWorkers()), users: normaliseUsers(settings.users?.length ? settings.users : DEFAULT_USERS) }; }
-function normaliseUsers(users) { const seen = new Set(); const clean = (Array.isArray(users) ? users : []).map(u => ({ email: String(u.email || "").trim().toLowerCase(), name: String(u.name || "").trim() || String(u.email || "").trim().toLowerCase(), role: ["main","admin","storeman"].includes(String(u.role || "").toLowerCase()) ? String(u.role).toLowerCase() : "storeman", password: String(u.password || "").trim() })).filter(u => u.email && u.password).filter(u => { if (seen.has(u.email)) return false; seen.add(u.email); return true; }); if (!clean.some(u => u.email === DEFAULT_USERS[0].email)) clean.unshift(DEFAULT_USERS[0]); return clean; }
+function normaliseUsers(users) { const seen = new Set(); const clean = (Array.isArray(users) ? users : []).map(u => ({ email: String(u.email || "").trim().toLowerCase(), name: String(u.name || "").trim() || String(u.email || "").trim().toLowerCase(), role: ["main","admin","storeman"].includes(String(u.role || "").toLowerCase()) ? String(u.role).toLowerCase() : "storeman", password: String(u.password || "").trim() })).filter(u => u.email && /^\d{6}$/.test(u.password)).filter(u => { if (seen.has(u.email)) return false; seen.add(u.email); return true; }); DEFAULT_USERS.forEach(user => { if (!seen.has(user.email)) { clean.push(user); seen.add(user.email); } }); return clean; }
 function parseWorkerList(text) { return uniqueList(String(text || "").split(/[\n,;]+/)); }
 function parseUserList(text) { return String(text || "").split(/\n+/).map(line => line.trim()).filter(Boolean).map(line => { const [email,name,role,password] = line.split("|").map(v => String(v || "").trim()); return { email, name, role, password }; }).filter(u => u.email && u.password); }
 function usersToText(users) { return (users || []).map(u => `${u.email} | ${u.name || u.email} | ${u.role || "storeman"} | ${u.password || ""}`).join("\n"); }
@@ -107,6 +121,51 @@ async function saveUsers(event) {
   event.preventDefault(); if (!isMainUser()) return alert("Main user only.");
   state.settings.users = normaliseUsers(parseUserList(els.usersList.value)); persist();
   try { if (IS_SERVER) { const r = await fetch("/api/admin/settings", { method:"POST", headers: authHeaders(), body: JSON.stringify({ foremanEmails:state.settings.foremanEmails, siteName:state.settings.siteName, workers:state.settings.workers, users:state.settings.users }) }); const p = await r.json(); if (!r.ok) throw new Error(p.error || "Login save failed"); applyServerState(p.state); } render(); } catch(e){ alert(e.message); }
+}
+
+async function changePin(event) {
+  event.preventDefault();
+  const currentPin = els.currentPin.value.trim();
+  const newPin = els.newPin.value.trim();
+  const confirmPin = els.confirmPin.value.trim();
+  els.pinMessage.textContent = "";
+  if (!/^\d{6}$/.test(currentPin) || !/^\d{6}$/.test(newPin)) {
+    els.pinMessage.textContent = "PINs must be exactly 6 digits.";
+    return;
+  }
+  if (newPin !== confirmPin) {
+    els.pinMessage.textContent = "New PINs do not match.";
+    return;
+  }
+
+  if (IS_SERVER) {
+    try {
+      const r = await fetch("/api/change-pin", { method:"POST", headers: authHeaders(), body: JSON.stringify({ currentPin, newPin }) });
+      const p = await r.json();
+      if (!r.ok) throw new Error(p.error || "PIN change failed");
+      credentials.password = newPin;
+      sessionStorage.setItem("toolQrLogin", JSON.stringify(credentials));
+      applyServerState(p.state);
+      els.pinForm.reset();
+      els.pinMessage.textContent = "PIN updated.";
+      return;
+    } catch(e) {
+      els.pinMessage.textContent = e.message;
+      return;
+    }
+  }
+
+  const user = state.settings.users.find(u => u.email === currentUser.email && u.password === currentPin);
+  if (!user) {
+    els.pinMessage.textContent = "Current PIN is incorrect.";
+    return;
+  }
+  user.password = newPin;
+  credentials.password = newPin;
+  sessionStorage.setItem("toolQrLogin", JSON.stringify(credentials));
+  persist();
+  els.pinForm.reset();
+  els.pinMessage.textContent = "PIN updated.";
 }
 
 async function moveAsset(type) {

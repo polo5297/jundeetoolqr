@@ -26,7 +26,6 @@
       </label>
       <div id="loginMessage" class="login-message"></div>
       <button type="submit">Sign in</button>
-      <p class="hint">Default main login: desmond.trinidad@byrnecut.com.au / 060225</p>
     </form>
   </section>
 
@@ -41,6 +40,7 @@
       </div>
       <div class="actions">
         <span id="currentUser" class="user-pill"></span>
+        <button id="pinToggle" type="button" class="secondary">Change PIN</button>
         <button id="adminToggle" type="button">Admin</button>
         <button id="exportData" type="button" class="admin-only" hidden>Export backup</button>
         <label class="button secondary admin-only" hidden>
@@ -53,6 +53,28 @@
     </header>
 
     <main>
+      <section id="pinPanel" class="panel pin-panel" hidden>
+        <div class="section-head">
+          <h2>Change PIN</h2>
+        </div>
+        <form id="pinForm" class="pin-form">
+          <label>
+            Current 6-digit PIN
+            <input id="currentPin" type="password" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{6}" maxlength="6" required>
+          </label>
+          <label>
+            New 6-digit PIN
+            <input id="newPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6}" maxlength="6" required>
+          </label>
+          <label>
+            Confirm new PIN
+            <input id="confirmPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6}" maxlength="6" required>
+          </label>
+          <button type="submit">Save PIN</button>
+          <div id="pinMessage" class="login-message"></div>
+        </form>
+      </section>
+
       <section class="scanner-panel">
         <div class="scan-box">
           <div id="scannerStatus" class="scanner-status">Ready to scan or enter an asset number.</div>
