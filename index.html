@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tool QR Register</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script defer src="registered-assets.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Tooling control</p>
+      <h1>QR Asset Register</h1>
+    </div>
+    <div class="actions">
+      <button id="adminToggle" type="button">Admin</button>
+      <button id="exportData" type="button">Export backup</button>
+      <label class="button secondary">
+        Import backup
+        <input id="importData" type="file" accept="application/json" hidden>
+      </label>
+      <button id="printLabels" type="button" class="secondary">Print labels</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="scanner-panel">
+      <div class="scan-box">
+        <div id="scannerStatus" class="scanner-status">Ready to scan or enter an asset number.</div>
+        <video id="scannerVideo" playsinline muted hidden></video>
+      </div>
+      <form id="checkoutForm" class="checkout-form">
+        <label>
+          Asset number
+          <input id="assetLookup" autocomplete="off" placeholder="Example: TOOL-0001" required>
+        </label>
+        <div class="lookup-result" id="lookupResult">Select a tool to log it out or back in.</div>
+        <label>
+          Person
+          <input id="personName" autocomplete="off" placeholder="Who has the tool?">
+        </label>
+        <label>
+          Notes
+          <input id="movementNotes" autocomplete="off" placeholder="Job number, location, or condition">
+        </label>
+        <div class="button-row">
+          <button id="scanButton" type="button" class="secondary">Scan QR</button>
+          <button id="checkoutButton" type="submit">Log out</button>
+          <button id="returnButton" type="button" class="secondary">Return</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="adminPanel" class="panel admin-panel" hidden>
+      <div class="section-head">
+        <h2>Admin</h2>
+        <button id="adminLogout" type="button" class="quiet" hidden>Log out</button>
+      </div>
+      <form id="adminLoginForm" class="admin-login">
+        <label>
+          Admin PIN
+          <input id="adminPin" type="password" autocomplete="current-password" placeholder="Default: 1234" required>
+        </label>
+        <button type="submit">Unlock admin</button>
+      </form>
+      <div id="adminControls" hidden>
+        <form id="settingsForm" class="settings-grid">
+          <label>
+            Foreman emails
+            <textarea id="foremanEmails" rows="3" placeholder="one@email.com, two@email.com"></textarea>
+          </label>
+          <label>
+            Site name
+            <input id="siteName" autocomplete="off" placeholder="Jundee">
+          </label>
+          <label>
+            New admin PIN
+            <input id="newAdminPin" type="password" autocomplete="new-password" placeholder="Leave blank to keep current">
+          </label>
+          <button type="submit">Save admin settings</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="split">
+      <form id="assetForm" class="panel">
+        <div class="section-head">
+          <h2>Add tooling</h2>
+          <button id="sampleData" type="button" class="quiet">Add examples</button>
+        </div>
+        <label>
+          Asset number
+          <input id="assetNumber" autocomplete="off" placeholder="TOOL-0001" required>
+        </label>
+        <label>
+          Tool name
+          <input id="toolName" autocomplete="off" placeholder="Milwaukee SDS drill" required>
+        </label>
+        <label>
+          Category
+          <input id="toolCategory" autocomplete="off" placeholder="Power tool, ladder, test gear">
+        </label>
+        <label>
+          Home location
+          <input id="homeLocation" autocomplete="off" placeholder="Workshop bay 2">
+        </label>
+        <button type="submit">Save tool</button>
+      </form>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Tool register</h2>
+          <input id="searchBox" class="search" autocomplete="off" placeholder="Search tools">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Tool</th>
+                <th>Serial</th>
+                <th>Status</th>
+                <th>Holder</th>
+                <th>QR</th>
+                <th class="admin-only" hidden>Admin</th>
+              </tr>
+            </thead>
+            <tbody id="assetTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <h2>Movement history</h2>
+        <button id="clearHistory" type="button" class="quiet">Clear history</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+  </main>
+
+  <section id="labelSheet" aria-hidden="true"></section>
+</body>
+</html>
