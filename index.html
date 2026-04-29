@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tool QR Register</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script defer src="registered-assets.js"></script>
+  <script defer src="workers.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <section id="loginScreen" class="login-screen">
+    <form id="loginForm" class="login-card">
+      <img class="login-logo" src="byrnecut-logo.png" alt="Byrnecut Mining logo">
+      <h1>QR Asset Register</h1>
+      <p>Sign in to log tools out, return tooling, and manage the register.</p>
+      <label>
+        Email
+        <input id="loginEmail" type="email" autocomplete="username" placeholder="name@byrnecut.com.au" required>
+      </label>
+      <label>
+        Password
+        <input id="loginPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="loginMessage" class="login-message"></div>
+      <button type="submit">Sign in</button>
+      <p class="hint">Default main login: desmond.trinidad@byrnecut.com.au / 060225</p>
+    </form>
+  </section>
+
+  <div id="appShell" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-logo" src="byrnecut-logo.png" alt="Byrnecut Mining logo">
+        <div>
+          <p class="eyebrow">Byrnecut Mining</p>
+          <h1>QR Asset Register</h1>
+        </div>
+      </div>
+      <div class="actions">
+        <span id="currentUser" class="user-pill"></span>
+        <button id="adminToggle" type="button">Admin</button>
+        <button id="exportData" type="button" class="admin-only" hidden>Export backup</button>
+        <label class="button secondary admin-only" hidden>
+          Import backup
+          <input id="importData" type="file" accept="application/json" hidden>
+        </label>
+        <button id="printLabels" type="button" class="secondary">Print labels</button>
+        <button id="logoutButton" type="button" class="secondary">Log out</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="scanner-panel">
+        <div class="scan-box">
+          <div id="scannerStatus" class="scanner-status">Ready to scan or enter an asset number.</div>
+          <video id="scannerVideo" playsinline muted hidden></video>
+        </div>
+        <form id="checkoutForm" class="checkout-form">
+          <label>
+            Asset number
+            <input id="assetLookup" autocomplete="off" placeholder="Example: JT001" required>
+          </label>
+          <div class="lookup-result" id="lookupResult">Select a tool to log it out, return it, or mark it out for repair.</div>
+          <label>
+            Person
+            <input id="personName" list="workerList" autocomplete="off" placeholder="Start typing approved worker name">
+            <datalist id="workerList"></datalist>
+          </label>
+          <label>
+            Notes
+            <input id="movementNotes" autocomplete="off" placeholder="Job number, location, or condition">
+          </label>
+          <div class="button-row">
+            <button id="scanButton" type="button" class="secondary">Scan QR</button>
+            <button id="checkoutButton" type="submit">Log out</button>
+            <button id="returnButton" type="button" class="secondary">Return</button>
+            <button id="repairButton" type="button" class="warning">Repair</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="adminPanel" class="admin-panel" hidden>
+        <div class="section-head">
+          <h2>Admin</h2>
+        </div>
+        <div class="admin-grid">
+          <form id="settingsForm" class="panel inset">
+            <h3>Site settings</h3>
+            <label>
+              Foreman emails
+              <textarea id="foremanEmails" rows="3" placeholder="one@email.com, two@email.com"></textarea>
+            </label>
+            <label>
+              Site name
+              <input id="siteName" autocomplete="off" placeholder="Jundee">
+            </label>
+            <label>
+              Approved borrowers <span id="workerCount" class="worker-count"></span>
+              <textarea id="workersList" placeholder="One approved worker per line"></textarea>
+            </label>
+            <button type="submit">Save settings</button>
+          </form>
+          <form id="usersForm" class="panel inset main-only" hidden>
+            <h3>Logins</h3>
+            <label>
+              Users
+              <textarea id="usersList" placeholder="email | name | role | password"></textarea>
+            </label>
+            <p class="hint">Roles: main, admin, storeman. One user per line.</p>
+            <button type="submit">Save logins</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="scanner-panel admin-only" hidden>
+      <form id="assetForm" class="panel">
+        <div class="section-head">
+          <h2>Add tooling</h2>
+          <button id="sampleData" type="button" class="quiet">Add examples</button>
+        </div>
+        <label>
+          Asset number
+          <input id="assetNumber" autocomplete="off" placeholder="TOOL-0001" required>
+        </label>
+        <label>
+          Tool name
+          <input id="toolName" autocomplete="off" placeholder="Milwaukee SDS drill" required>
+        </label>
+        <label>
+          Category
+          <input id="toolCategory" autocomplete="off" placeholder="Power tool, ladder, test gear">
+        </label>
+        <label>
+          Home location
+          <input id="homeLocation" autocomplete="off" placeholder="Workshop bay 2">
+        </label>
+        <button type="submit">Save tool</button>
+      </form>
+      </section>
+
+      <section class="panel register-panel">
+        <div class="section-head">
+          <h2>Tool register</h2>
+          <input id="searchBox" class="search" autocomplete="off" placeholder="Search tools">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Tool</th>
+                <th>Serial</th>
+                <th>Status</th>
+                <th>Holder</th>
+                <th>QR</th>
+                <th class="admin-only" hidden>Admin</th>
+              </tr>
+            </thead>
+            <tbody id="assetTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Movement history</h2>
+          <button id="clearHistory" type="button" class="quiet admin-only" hidden>Clear history</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </section>
+    </main>
+
+    <section id="labelSheet" aria-hidden="true"></section>
+  </div>
+</body>
+</html>
