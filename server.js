@@ -23,6 +23,7 @@ const types = {
 
 function defaultState() {
   let assets = [];
+  let workers = [];
   try {
     const source = fs.readFileSync(path.join(root, "registered-assets.js"), "utf8");
     const json = source.replace(/^window\.REGISTERED_ASSETS = /, "").replace(/;\s*$/, "");
@@ -30,13 +31,21 @@ function defaultState() {
   } catch {
     assets = [];
   }
+  try {
+    const source = fs.readFileSync(path.join(root, "workers.js"), "utf8");
+    const json = source.replace(/^window\.AUTHORISED_WORKERS = /, "").replace(/;\s*$/, "");
+    workers = JSON.parse(json);
+  } catch {
+    workers = [];
+  }
   return {
     assets: assets.map(prepareAsset),
     history: [],
-    settings: {
+    settings: normaliseSettings({
       foremanEmails: process.env.FOREMAN_EMAILS || "",
-      siteName: process.env.SITE_NAME || "Jundee"
-    }
+      siteName: process.env.SITE_NAME || "Jundee",
+      workers
+    })
   };
 }
 
@@ -61,13 +70,50 @@ function readState() {
     const state = JSON.parse(fs.readFileSync(dataFile, "utf8"));
     state.assets = (state.assets || []).map(prepareAsset);
     state.history = state.history || [];
-    state.settings = state.settings || {};
+    state.settings = normaliseSettings(state.settings || {});
     return state;
   } catch {
     const state = defaultState();
     writeState(state);
     return state;
   }
+}
+
+function uniqueWorkers(workers) {
+  const seen = new Set();
+  return (Array.isArray(workers) ? workers : [])
+    .map(worker => String(worker || "").trim())
+    .filter(Boolean)
+    .filter(worker => {
+      const key = worker.toLowerCase().replace(/\s+/g, " ");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function normaliseSettings(settings) {
+  let workers = uniqueWorkers(settings.workers || []);
+  if (!workers.length) {
+    try {
+      const source = fs.readFileSync(path.join(root, "workers.js"), "utf8");
+      const json = source.replace(/^window\.AUTHORISED_WORKERS = /, "").replace(/;\s*$/, "");
+      workers = uniqueWorkers(JSON.parse(json));
+    } catch {
+      workers = [];
+    }
+  }
+  return {
+    foremanEmails: settings.foremanEmails || process.env.FOREMAN_EMAILS || "",
+    siteName: settings.siteName || process.env.SITE_NAME || "Jundee",
+    workers
+  };
+}
+
+function approvedWorkerName(state, input) {
+  const key = String(input || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return (state.settings?.workers || []).find(worker => worker.toLowerCase().replace(/\s+/g, " ") === key) || "";
 }
 
 function writeState(state) {
@@ -112,7 +158,8 @@ function publicState(state) {
     history: state.history || [],
     settings: {
       foremanEmails: state.settings?.foremanEmails || process.env.FOREMAN_EMAILS || "",
-      siteName: state.settings?.siteName || process.env.SITE_NAME || "Jundee"
+      siteName: state.settings?.siteName || process.env.SITE_NAME || "Jundee",
+      workers: state.settings?.workers || []
     }
   };
 }
@@ -182,9 +229,13 @@ async function handleApi(req, res, url) {
       sendJson(res, 404, { error: "Tool not found" });
       return;
     }
-    if (body.type === "checkout" && !body.person) {
-      sendJson(res, 400, { error: "Person is required" });
-      return;
+    if (body.type === "checkout") {
+      const approved = approvedWorkerName(state, body.person);
+      if (!approved) {
+        sendJson(res, 400, { error: "Only approved workers can borrow tools" });
+        return;
+      }
+      body.person = approved;
     }
 
     const timestamp = new Date().toISOString();
@@ -226,11 +277,12 @@ async function handleApi(req, res, url) {
     if (!requireAdmin(req, res)) return;
     const body = await readBody(req);
     const state = readState();
-    state.settings = {
+    state.settings = normaliseSettings({
       ...(state.settings || {}),
       foremanEmails: body.foremanEmails || "",
-      siteName: body.siteName || "Jundee"
-    };
+      siteName: body.siteName || "Jundee",
+      workers: body.workers || []
+    });
     writeState(state);
     sendJson(res, 200, { state: publicState(state) });
     return;

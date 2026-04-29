@@ -7,13 +7,17 @@
   <link rel="stylesheet" href="styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script defer src="registered-assets.js"></script>
+  <script defer src="workers.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Tooling control</p>
-      <h1>QR Asset Register</h1>
+    <div class="brand">
+      <img class="brand-logo" src="byrnecut-logo.png" alt="Byrnecut Mining logo">
+      <div>
+        <p class="eyebrow">Byrnecut Mining</p>
+        <h1>QR Asset Register</h1>
+      </div>
     </div>
     <div class="actions">
       <button id="adminToggle" type="button">Admin</button>
@@ -40,7 +44,8 @@
         <div class="lookup-result" id="lookupResult">Select a tool to log it out or back in.</div>
         <label>
           Person
-          <input id="personName" autocomplete="off" placeholder="Who has the tool?">
+          <input id="personName" list="workerList" autocomplete="off" placeholder="Start typing approved worker name" required>
+          <datalist id="workerList"></datalist>
         </label>
         <label>
           Notes
@@ -67,20 +72,29 @@
         <button type="submit">Unlock admin</button>
       </form>
       <div id="adminControls" hidden>
-        <form id="settingsForm" class="settings-grid">
-          <label>
-            Foreman emails
-            <textarea id="foremanEmails" rows="3" placeholder="one@email.com, two@email.com"></textarea>
-          </label>
-          <label>
-            Site name
-            <input id="siteName" autocomplete="off" placeholder="Jundee">
-          </label>
-          <label>
-            New admin PIN
-            <input id="newAdminPin" type="password" autocomplete="new-password" placeholder="Leave blank to keep current">
-          </label>
-          <button type="submit">Save admin settings</button>
+        <form id="settingsForm">
+          <div class="settings-grid">
+            <label>
+              Foreman emails
+              <textarea id="foremanEmails" rows="3" placeholder="one@email.com, two@email.com"></textarea>
+            </label>
+            <label>
+              Site name
+              <input id="siteName" autocomplete="off" placeholder="Jundee">
+            </label>
+            <label>
+              New admin PIN
+              <input id="newAdminPin" type="password" autocomplete="new-password" placeholder="Leave blank to keep current">
+            </label>
+            <button type="submit">Save admin settings</button>
+          </div>
+          <div class="worker-admin">
+            <label>
+              Approved borrowers <span id="workerCount" class="worker-count"></span>
+              <textarea id="workersList" placeholder="One approved worker per line"></textarea>
+            </label>
+            <button type="submit">Save workers</button>
+          </div>
         </form>
       </div>
     </section>

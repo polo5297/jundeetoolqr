@@ -2,7 +2,8 @@ const STORE_KEY = "toolQrRegister.v1";
 const DEFAULT_SETTINGS = {
   adminPin: "1234",
   foremanEmails: "",
-  siteName: "Jundee"
+  siteName: "Jundee",
+  workers: []
 };
 const IS_SERVER = location.protocol.startsWith("http");
 
@@ -29,6 +30,9 @@ const els = {
   foremanEmails: document.querySelector("#foremanEmails"),
   siteName: document.querySelector("#siteName"),
   newAdminPin: document.querySelector("#newAdminPin"),
+  workerList: document.querySelector("#workerList"),
+  workersList: document.querySelector("#workersList"),
+  workerCount: document.querySelector("#workerCount"),
   labelSheet: document.querySelector("#labelSheet")
 };
 
@@ -63,14 +67,14 @@ function loadState() {
   const fallback = {
     assets: Array.isArray(window.REGISTERED_ASSETS) ? window.REGISTERED_ASSETS.map(prepareAsset) : [],
     history: [],
-    settings: { ...DEFAULT_SETTINGS }
+    settings: { ...DEFAULT_SETTINGS, workers: getDefaultWorkers() }
   };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY));
     if (!saved) return fallback;
     saved.assets = (saved.assets || []).map(prepareAsset);
     saved.history = saved.history || [];
-    saved.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
+    saved.settings = normaliseSettings(saved.settings || {});
     if (!saved.assets.length && fallback.assets.length) return fallback;
     return saved;
   } catch {
@@ -97,7 +101,7 @@ async function hydrateFromServer() {
 function applyServerState(serverState) {
   state.assets = (serverState.assets || []).map(prepareAsset);
   state.history = serverState.history || [];
-  state.settings = { ...DEFAULT_SETTINGS, ...(serverState.settings || {}) };
+  state.settings = normaliseSettings(serverState.settings || {});
   persist();
 }
 
@@ -114,6 +118,38 @@ async function syncFullState() {
   if (!response.ok) throw new Error("Server save failed");
   const payload = await response.json();
   applyServerState(payload.state);
+}
+
+function getDefaultWorkers() {
+  return uniqueWorkers(Array.isArray(window.AUTHORISED_WORKERS) ? window.AUTHORISED_WORKERS : []);
+}
+
+function normaliseSettings(settings) {
+  const workers = uniqueWorkers(Array.isArray(settings.workers) && settings.workers.length ? settings.workers : getDefaultWorkers());
+  return { ...DEFAULT_SETTINGS, ...settings, workers };
+}
+
+function uniqueWorkers(workers) {
+  const seen = new Set();
+  return workers
+    .map(worker => String(worker || "").trim())
+    .filter(Boolean)
+    .filter(worker => {
+      const key = worker.toLowerCase().replace(/\s+/g, " ");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function parseWorkerList(text) {
+  return uniqueWorkers(String(text || "").split(/[\n,;]+/));
+}
+
+function getApprovedWorkerName(input) {
+  const key = String(input || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return (state.settings.workers || []).find(worker => worker.toLowerCase().replace(/\s+/g, " ") === key) || "";
 }
 
 function getAdminPin() {
@@ -201,6 +237,7 @@ async function saveSettings(event) {
   if (!adminUnlocked) return;
   state.settings.foremanEmails = els.foremanEmails.value.trim();
   state.settings.siteName = els.siteName.value.trim() || "Jundee";
+  state.settings.workers = parseWorkerList(els.workersList.value);
   if (!IS_SERVER && els.newAdminPin.value.trim()) {
     state.settings.adminPin = els.newAdminPin.value.trim();
     els.newAdminPin.value = "";
@@ -216,7 +253,8 @@ async function saveSettings(event) {
         },
         body: JSON.stringify({
           foremanEmails: state.settings.foremanEmails,
-          siteName: state.settings.siteName
+          siteName: state.settings.siteName,
+          workers: state.settings.workers
         })
       });
       if (!response.ok) throw new Error("Settings save failed");
@@ -239,9 +277,9 @@ async function moveAsset(type) {
     return;
   }
 
-  const person = els.personName.value.trim();
+  const person = type === "checkout" ? getApprovedWorkerName(els.personName.value.trim()) : els.personName.value.trim();
   if (type === "checkout" && !person) {
-    setLookupMessage("Add the person's name before logging this tool out.");
+    setLookupMessage("Only approved workers can borrow tools. Start typing a name and pick one from the approved list.");
     return;
   }
 
@@ -332,6 +370,7 @@ function render() {
   renderAdmin();
   renderAssets();
   renderHistory();
+  renderWorkers();
   updateLookup();
 }
 
@@ -345,9 +384,18 @@ function renderAdmin() {
   document.querySelector("#adminLogout").hidden = !adminUnlocked;
   els.foremanEmails.value = state.settings.foremanEmails || "";
   els.siteName.value = state.settings.siteName || "Jundee";
+  els.workersList.value = (state.settings.workers || []).join("\n");
+  els.workerCount.textContent = `(${(state.settings.workers || []).length})`;
   document.querySelectorAll(".admin-only").forEach(node => {
     node.hidden = !adminUnlocked;
   });
+}
+
+function renderWorkers() {
+  const workers = state.settings.workers || [];
+  if (els.workerList) {
+    els.workerList.innerHTML = workers.map(worker => `<option value="${escapeHtml(worker)}"></option>`).join("");
+  }
 }
 
 function renderAssets() {
@@ -369,7 +417,7 @@ function renderAssets() {
     </tr>
   `).join("") || `<tr><td colspan="${adminUnlocked ? 7 : 6}">No tools added yet.</td></tr>`;
 
-  drawQrCodes(".qr-small", 58);
+  drawQrCodes(".qr-small", 64);
   document.querySelectorAll("[data-delete]").forEach(button => {
     button.addEventListener("click", () => deleteAsset(button.dataset.delete));
   });
@@ -485,7 +533,7 @@ function importData(event) {
       if (!Array.isArray(imported.assets) || !Array.isArray(imported.history)) throw new Error("Invalid file");
       state.assets = imported.assets.map(prepareAsset);
       state.history = imported.history;
-      state.settings = { ...state.settings, ...(imported.settings || {}) };
+      state.settings = normaliseSettings({ ...state.settings, ...(imported.settings || {}) });
       persist();
       syncFullState().catch(() => alert("Backup imported locally, but the Render server did not accept the update."));
       render();
