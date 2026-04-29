@@ -9,6 +9,9 @@ try { nodemailer = require("nodemailer"); } catch { nodemailer = null; }
 const root = __dirname;
 const port = Number(process.env.PORT || 4173);
 const dataFile = process.env.DATA_FILE || path.join(root, "tool-register-data.json");
+const shiftTimezone = process.env.SHIFT_TIMEZONE || "Australia/Perth";
+const shiftReminderTimes = (process.env.SHIFT_REMINDER_TIMES || "05:30,17:30").split(",").map(time => time.trim()).filter(Boolean);
+const sentShiftReminders = new Set();
 const types = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".json":"application/json; charset=utf-8", ".png":"image/png" };
 
 const DEFAULT_USERS = [
@@ -120,19 +123,91 @@ function buildTransport() {
   if (!nodemailer || !process.env.SMTP_HOST) return null;
   return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true", auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || "" } : undefined });
 }
-async function sendMovementEmail(state, movement, asset) {
+function notificationRecipients(state) {
   const configuredRecipients = (state.settings?.foremanEmails || process.env.FOREMAN_EMAILS || "").split(/[,\n;]/).map(e=>e.trim()).filter(Boolean);
   const loginRecipients = (state.settings?.users || [])
     .filter(user => ["main", "admin", "storeman"].includes(user.role))
     .map(user => user.email)
     .filter(Boolean);
-  const recipients = [...new Set([...configuredRecipients, ...loginRecipients].map(email => email.toLowerCase()))];
+  return [...new Set([...configuredRecipients, ...loginRecipients].map(email => email.toLowerCase()))];
+}
+async function sendMovementEmail(state, movement, asset) {
+  const recipients = notificationRecipients(state);
   const transport = buildTransport(); if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
   const action = movement.type === "checkout" ? "logged out" : movement.type === "repair" ? "sent for repair" : "returned";
   const siteName = state.settings?.siteName || "Jundee";
   const body = [`Tool ${action}`, "", `Asset: ${asset.assetNumber}`, `Tool: ${asset.name}`, `Serial: ${asset.serialNumber || "-"}`, `Part number: ${asset.partNumber || "-"}`, `Person: ${movement.person}`, `Notes: ${movement.notes || "-"}`, `Time: ${new Date(movement.timestamp).toLocaleString()}`, `Site: ${siteName}`].join("\n");
   await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: recipients.join(","), subject: `${siteName} tool ${action}: ${asset.assetNumber}`, text: body });
   return { sent:true };
+}
+
+function sameWorkerName(left, right) {
+  return String(left || "").trim().toLowerCase().replace(/\s+/g, " ") === String(right || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+function outstandingToolsForWorker(state, workerName) {
+  return (state.assets || []).filter(asset => asset.status === "out" && sameWorkerName(asset.holder, workerName));
+}
+function currentShiftTime() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: shiftTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date()).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+async function sendShiftReminder(state, shiftTime) {
+  const outstanding = (state.assets || []).filter(asset => asset.status === "out");
+  if (!outstanding.length) return { sent:false, reason:"No tools are currently logged out" };
+  const recipients = notificationRecipients(state);
+  const transport = buildTransport();
+  if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
+  const siteName = state.settings?.siteName || "Jundee";
+  const grouped = new Map();
+  outstanding.forEach(asset => {
+    const holder = asset.holder || "Unknown holder";
+    if (!grouped.has(holder)) grouped.set(holder, []);
+    grouped.get(holder).push(asset);
+  });
+  const lines = [
+    `${siteName} shift reminder - tools not returned by ${shiftTime.time}`,
+    "",
+    `Timezone: ${shiftTimezone}`,
+    `Outstanding tools: ${outstanding.length}`,
+    ""
+  ];
+  [...grouped.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([holder, assets]) => {
+    lines.push(holder);
+    assets.forEach(asset => {
+      lines.push(`- ${asset.assetNumber} | ${asset.name} | Serial: ${asset.serialNumber || "-"} | Logged out: ${asset.lastMoved ? new Date(asset.lastMoved).toLocaleString() : "-"}`);
+    });
+    lines.push("");
+  });
+  await transport.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: recipients.join(","),
+    subject: `${siteName} tools not returned by ${shiftTime.time}`,
+    text: lines.join("\n")
+  });
+  return { sent:true };
+}
+async function checkShiftReminders() {
+  const shiftTime = currentShiftTime();
+  if (!shiftReminderTimes.includes(shiftTime.time)) return;
+  const key = `${shiftTime.date}-${shiftTime.time}`;
+  if (sentShiftReminders.has(key)) return;
+  sentShiftReminders.add(key);
+  try {
+    await sendShiftReminder(readState(), shiftTime);
+  } catch (error) {
+    console.error(`Shift reminder failed: ${error.message}`);
+  }
 }
 
 async function handleApi(req, res, url) {
@@ -165,7 +240,13 @@ async function handleApi(req, res, url) {
     const asset = (state.assets || []).find(item => item.id === body.assetId || item.qrValue === lookup || item.assetNumber === lookup);
     if (!asset) return sendJson(res, 404, { error:"Tool not found" });
     let person = "";
-    if (body.type === "checkout") { person = approvedWorkerName(state, body.person); if (!person) return sendJson(res, 400, { error:"Only approved workers can borrow tools" }); asset.status = "out"; asset.holder = person; }
+    if (body.type === "checkout") {
+      person = approvedWorkerName(state, body.person);
+      if (!person) return sendJson(res, 400, { error:"Only approved workers can borrow tools" });
+      const outstanding = outstandingToolsForWorker(state, person).filter(item => item.id !== asset.id);
+      if (outstanding.length) return sendJson(res, 400, { error:`${person} already has ${outstanding.length} tool(s) logged out. Return them or mark them out for repair before issuing another tool.` });
+      asset.status = "out"; asset.holder = person;
+    }
     else if (body.type === "repair") { person = "OUT FOR REPAIR"; asset.status = "repair"; asset.holder = "Out for repair"; }
     else { person = body.person || user.name || "Workshop"; asset.status = "available"; asset.holder = ""; }
     asset.lastMoved = new Date().toISOString();
@@ -196,4 +277,8 @@ function serveStatic(req, res, url) {
   fs.readFile(filePath, (err,data)=>{ if (err) { res.writeHead(404); return res.end("Not found"); } res.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "application/octet-stream" }); res.end(data); });
 }
 
-http.createServer(async (req,res)=>{ const url = new URL(req.url, `http://${req.headers.host}`); try { if (url.pathname.startsWith("/api/")) return await handleApi(req,res,url); serveStatic(req,res,url); } catch(e){ sendJson(res, 500, { error:e.message }); } }).listen(port, ()=>console.log(`Tool QR Register running at http://localhost:${port}`));
+http.createServer(async (req,res)=>{ const url = new URL(req.url, `http://${req.headers.host}`); try { if (url.pathname.startsWith("/api/")) return await handleApi(req,res,url); serveStatic(req,res,url); } catch(e){ sendJson(res, 500, { error:e.message }); } }).listen(port, ()=>{
+  console.log(`Tool QR Register running at http://localhost:${port}`);
+  setInterval(checkShiftReminders, 30_000);
+  checkShiftReminders();
+});

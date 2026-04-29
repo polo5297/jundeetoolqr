@@ -6,19 +6,25 @@ services:
     startCommand: npm start
     envVars:
       - key: SMTP_HOST
-        sync: false
+        value: smtp.gmail.com
       - key: SMTP_PORT
         value: "587"
+      - key: SMTP_SECURE
+        value: "false"
       - key: SMTP_USER
-        sync: false
+        value: methoddieselrepairs@gmail.com
       - key: SMTP_PASS
         sync: false
       - key: SMTP_FROM
-        sync: false
+        value: methoddieselrepairs@gmail.com
       - key: FOREMAN_EMAILS
         sync: false
       - key: SITE_NAME
         value: Jundee
+      - key: SHIFT_TIMEZONE
+        value: Australia/Perth
+      - key: SHIFT_REMINDER_TIMES
+        value: 05:30,17:30
       - key: DATA_FILE
         value: /var/data/tool-register.json
     disk:
