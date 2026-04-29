@@ -28,7 +28,7 @@ http://localhost:4173
 - Return a tool.
 - Email foremen when a tool is logged out or returned.
 - Email shift reminders at 05:30 and 17:30 for tools still logged out.
-- Block a worker from logging out another tool while they already have one out.
+- Block a worker from logging out more tools only when they have overdue tools from a previous shift.
 - Lock tool add/remove and register import behind admin mode.
 - Keep a movement history.
 - Export and import a JSON backup.

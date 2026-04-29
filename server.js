@@ -53,7 +53,7 @@ function prepareAsset(asset) {
   const serial = asset.serialNumber || "";
   const duplicate = Boolean(asset.duplicateAssetNumber);
   const id = asset.id || (duplicate && serial ? `${assetNumber}|${serial}` : assetNumber);
-  return { ...asset, assetNumber, id: String(id).toUpperCase(), qrValue: String(asset.qrValue || id || assetNumber).toUpperCase(), status: asset.status || "available", holder: asset.holder || "", lastMoved: asset.lastMoved || "" };
+  return { ...asset, assetNumber, id: String(id).toUpperCase(), qrValue: String(asset.qrValue || id || assetNumber).toUpperCase(), status: asset.status || "available", holder: asset.holder || "", lastMoved: asset.lastMoved || "", overdueSince: asset.overdueSince || "" };
 }
 
 function uniqueList(list) {
@@ -147,6 +147,9 @@ function sameWorkerName(left, right) {
 function outstandingToolsForWorker(state, workerName) {
   return (state.assets || []).filter(asset => asset.status === "out" && sameWorkerName(asset.holder, workerName));
 }
+function overdueToolsForWorker(state, workerName) {
+  return outstandingToolsForWorker(state, workerName).filter(asset => asset.overdueSince);
+}
 function currentShiftTime() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: shiftTimezone,
@@ -165,6 +168,10 @@ function currentShiftTime() {
 async function sendShiftReminder(state, shiftTime) {
   const outstanding = (state.assets || []).filter(asset => asset.status === "out");
   if (!outstanding.length) return { sent:false, reason:"No tools are currently logged out" };
+  outstanding.forEach(asset => {
+    if (!asset.overdueSince) asset.overdueSince = `${shiftTime.date} ${shiftTime.time}`;
+  });
+  writeState(state);
   const recipients = notificationRecipients(state);
   const transport = buildTransport();
   if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
@@ -243,12 +250,12 @@ async function handleApi(req, res, url) {
     if (body.type === "checkout") {
       person = approvedWorkerName(state, body.person);
       if (!person) return sendJson(res, 400, { error:"Only approved workers can borrow tools" });
-      const outstanding = outstandingToolsForWorker(state, person).filter(item => item.id !== asset.id);
-      if (outstanding.length) return sendJson(res, 400, { error:`${person} already has ${outstanding.length} tool(s) logged out. Return them or mark them out for repair before issuing another tool.` });
+      const overdue = overdueToolsForWorker(state, person).filter(item => item.id !== asset.id);
+      if (overdue.length) return sendJson(res, 400, { error:`${person} has ${overdue.length} overdue tool(s) from a previous shift. Return them or mark them out for repair before issuing another tool.` });
       asset.status = "out"; asset.holder = person;
     }
-    else if (body.type === "repair") { person = "OUT FOR REPAIR"; asset.status = "repair"; asset.holder = "Out for repair"; }
-    else { person = body.person || user.name || "Workshop"; asset.status = "available"; asset.holder = ""; }
+    else if (body.type === "repair") { person = "OUT FOR REPAIR"; asset.status = "repair"; asset.holder = "Out for repair"; asset.overdueSince = ""; }
+    else { person = body.person || user.name || "Workshop"; asset.status = "available"; asset.holder = ""; asset.overdueSince = ""; }
     asset.lastMoved = new Date().toISOString();
     const movement = { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, assetNumber: asset.assetNumber, toolName: asset.name, type: body.type, person, loginUser: user.email, notes: body.notes || "", timestamp: asset.lastMoved };
     state.history = [movement, ...(state.history || [])]; writeState(state);
