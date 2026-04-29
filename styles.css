@@ -31,6 +31,7 @@ button:hover, .button:hover { background: #ffe260; }
 .login-message { color: var(--orange); font-weight: 700; min-height: 20px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px clamp(18px, 4vw, 44px); background: #000; border-bottom: 4px solid var(--yellow); position: sticky; top: 0; z-index: 5; }
 .brand, .actions, .button-row, .section-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.compact-head { margin-bottom: 8px; }
 .brand-logo { width: 86px; height: auto; background: #fff; border-radius: 6px; padding: 5px; }
 .eyebrow { margin: 0 0 4px; color: var(--yellow); text-transform: uppercase; font-size: 13px; font-weight: 900; letter-spacing: .06em; }
 h1, h2, h3, p { margin-top: 0; }
@@ -50,12 +51,19 @@ textarea { min-height: 90px; resize: vertical; }
 input:focus, textarea:focus { border-color: var(--yellow); outline: 3px solid rgba(255,210,0,.18); }
 .lookup-result { border: 1px dashed #666; border-radius: 8px; color: var(--muted); min-height: 58px; padding: 12px; line-height: 1.4; }
 .lookup-result strong { color: var(--white); }
+.batch-panel { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #0c0c0c; display: grid; gap: 10px; }
+.batch-list { display: grid; gap: 8px; max-height: 220px; overflow: auto; }
+.batch-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; background: #050505; color: var(--white); }
 .user-pill { border: 1px solid var(--line); background: #111; color: var(--yellow); border-radius: 999px; padding: 9px 12px; font-weight: 800; }
 .admin-panel { margin-bottom: 18px; }
 .admin-grid { display: grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 18px; align-items: start; }
 .inset { background: #0c0c0c; }
 .worker-count { color: var(--yellow); }
 .register-panel { margin-bottom: 18px; }
+.register-tools { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.filter-button { min-height: 34px; padding: 0 10px; border-color: #777; background: transparent; color: var(--white); }
+.filter-button.active { background: var(--yellow); border-color: var(--yellow); color: #000; }
 .search { max-width: 320px; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }

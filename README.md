@@ -23,14 +23,16 @@ http://localhost:4173
 - Allows signed-in users to change their own 6-digit PIN.
 - Add tools with their own asset number, name, category, and home location.
 - Generate printable QR labels for every tool.
-- Scan a QR code or type the asset number.
+- Scan multiple QR codes into a batch, or type asset numbers manually.
 - Log a tool out to a person with notes.
+- Log out all scanned batch tools to one worker.
 - Return a tool.
 - Email foremen when a tool is logged out or returned.
 - Email shift reminders at 05:30 and 17:30 for tools still logged out.
 - Block a worker from logging out more tools only when they have overdue tools from a previous shift.
 - Lock tool add/remove and register import behind admin mode.
 - Keep a movement history.
+- Filter the register by all, booked out, not booked out, or repair.
 - Export and import a JSON backup.
 
 ## Render setup

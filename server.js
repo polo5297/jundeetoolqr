@@ -140,6 +140,24 @@ async function sendMovementEmail(state, movement, asset) {
   await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: recipients.join(","), subject: `${siteName} tool ${action}: ${asset.assetNumber}`, text: body });
   return { sent:true };
 }
+async function sendBatchCheckoutEmail(state, movements, assets, person, notes) {
+  const recipients = notificationRecipients(state);
+  const transport = buildTransport(); if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
+  const siteName = state.settings?.siteName || "Jundee";
+  const lines = [
+    `Batch tool checkout`,
+    "",
+    `Person: ${person}`,
+    `Tools: ${assets.length}`,
+    `Notes: ${notes || "-"}`,
+    `Time: ${new Date(movements[0]?.timestamp || Date.now()).toLocaleString()}`,
+    `Site: ${siteName}`,
+    "",
+    ...assets.map(asset => `- ${asset.assetNumber} | ${asset.name} | Serial: ${asset.serialNumber || "-"}`)
+  ];
+  await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: recipients.join(","), subject: `${siteName} batch checkout: ${assets.length} tools to ${person}`, text: lines.join("\n") });
+  return { sent:true };
+}
 
 function sameWorkerName(left, right) {
   return String(left || "").trim().toLowerCase().replace(/\s+/g, " ") === String(right || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -261,6 +279,27 @@ async function handleApi(req, res, url) {
     state.history = [movement, ...(state.history || [])]; writeState(state);
     let email = { sent:false, reason:"Email not attempted" }; try { email = await sendMovementEmail(state, movement, asset); } catch(e){ email = { sent:false, reason:e.message }; }
     return sendJson(res, 200, { state: publicState(state, user.role === "main"), movement, asset, email });
+  }
+  if (req.method === "POST" && url.pathname === "/api/batch-checkout") {
+    const ctx = requireUser(req, res, ["main","admin","storeman"]); if (!ctx) return;
+    const body = await readBody(req); const { state, user } = ctx;
+    const person = approvedWorkerName(state, body.person);
+    if (!person) return sendJson(res, 400, { error:"Only approved workers can borrow tools" });
+    const overdue = overdueToolsForWorker(state, person);
+    if (overdue.length) return sendJson(res, 400, { error:`${person} has ${overdue.length} overdue tool(s) from a previous shift. Return them or mark them out for repair before issuing more tools.` });
+    const assetIds = [...new Set((body.assetIds || []).map(id => String(id || "").toUpperCase()).filter(Boolean))];
+    const assets = assetIds.map(id => (state.assets || []).find(asset => asset.id === id || asset.qrValue === id || asset.assetNumber === id)).filter(Boolean);
+    if (!assets.length) return sendJson(res, 400, { error:"No valid tools were supplied" });
+    const unavailable = assets.filter(asset => asset.status !== "available");
+    if (unavailable.length) return sendJson(res, 400, { error:`${unavailable.length} tool(s) are not available for checkout` });
+    const timestamp = new Date().toISOString();
+    const movements = assets.map(asset => {
+      asset.status = "out"; asset.holder = person; asset.lastMoved = timestamp; asset.overdueSince = "";
+      return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, assetNumber: asset.assetNumber, toolName: asset.name, type: "checkout", person, loginUser: user.email, notes: body.notes || "", timestamp };
+    });
+    state.history = [...movements, ...(state.history || [])]; writeState(state);
+    let email = { sent:false, reason:"Email not attempted" }; try { email = await sendBatchCheckoutEmail(state, movements, assets, person, body.notes || ""); } catch(e){ email = { sent:false, reason:e.message }; }
+    return sendJson(res, 200, { state: publicState(state, user.role === "main"), movements, assets, email });
   }
   if (req.method === "POST" && url.pathname === "/api/admin/state") {
     const ctx = requireUser(req, res, ["main","admin"]); if (!ctx) return;
