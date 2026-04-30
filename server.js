@@ -131,34 +131,6 @@ function notificationRecipients(state) {
     .filter(Boolean);
   return [...new Set([...configuredRecipients, ...loginRecipients].map(email => email.toLowerCase()))];
 }
-async function sendMovementEmail(state, movement, asset) {
-  const recipients = notificationRecipients(state);
-  const transport = buildTransport(); if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
-  const action = movement.type === "checkout" ? "logged out" : movement.type === "repair" ? "sent for repair" : "returned";
-  const siteName = state.settings?.siteName || "Jundee";
-  const body = [`Tool ${action}`, "", `Asset: ${asset.assetNumber}`, `Tool: ${asset.name}`, `Serial: ${asset.serialNumber || "-"}`, `Part number: ${asset.partNumber || "-"}`, `Person: ${movement.person}`, `Notes: ${movement.notes || "-"}`, `Time: ${new Date(movement.timestamp).toLocaleString()}`, `Site: ${siteName}`].join("\n");
-  await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: recipients.join(","), subject: `${siteName} tool ${action}: ${asset.assetNumber}`, text: body });
-  return { sent:true };
-}
-async function sendBatchCheckoutEmail(state, movements, assets, person, notes) {
-  const recipients = notificationRecipients(state);
-  const transport = buildTransport(); if (!transport || !recipients.length) return { sent:false, reason:"Email is not configured" };
-  const siteName = state.settings?.siteName || "Jundee";
-  const lines = [
-    `Batch tool checkout`,
-    "",
-    `Person: ${person}`,
-    `Tools: ${assets.length}`,
-    `Notes: ${notes || "-"}`,
-    `Time: ${new Date(movements[0]?.timestamp || Date.now()).toLocaleString()}`,
-    `Site: ${siteName}`,
-    "",
-    ...assets.map(asset => `- ${asset.assetNumber} | ${asset.name} | Serial: ${asset.serialNumber || "-"}`)
-  ];
-  await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: recipients.join(","), subject: `${siteName} batch checkout: ${assets.length} tools to ${person}`, text: lines.join("\n") });
-  return { sent:true };
-}
-
 function sameWorkerName(left, right) {
   return String(left || "").trim().toLowerCase().replace(/\s+/g, " ") === String(right || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -217,10 +189,30 @@ async function sendShiftReminder(state, shiftTime) {
   await transport.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: recipients.join(","),
-    subject: `${siteName} tools not returned by ${shiftTime.time}`,
+    subject: "flogs havent returned me chase up",
     text: lines.join("\n")
   });
   return { sent:true };
+}
+async function sendTestEmail(state, user) {
+  const recipients = notificationRecipients(state);
+  const transport = buildTransport();
+  if (!transport) return { sent:false, reason:"Email transport is not configured" };
+  if (!recipients.length) return { sent:false, reason:"No email recipients are configured" };
+  const siteName = state.settings?.siteName || "Jundee";
+  await transport.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: recipients.join(","),
+    subject: "QR tool register test email",
+    text: [
+      "This is a test email from the QR tool register.",
+      "",
+      `Site: ${siteName}`,
+      `Sent by: ${user.name || user.email}`,
+      `Time: ${new Date().toLocaleString()}`
+    ].join("\n")
+  });
+  return { sent:true, recipients: recipients.length };
 }
 async function checkShiftReminders() {
   const shiftTime = currentShiftTime();
@@ -277,8 +269,7 @@ async function handleApi(req, res, url) {
     asset.lastMoved = new Date().toISOString();
     const movement = { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, assetNumber: asset.assetNumber, toolName: asset.name, type: body.type, person, loginUser: user.email, notes: body.notes || "", timestamp: asset.lastMoved };
     state.history = [movement, ...(state.history || [])]; writeState(state);
-    let email = { sent:false, reason:"Email not attempted" }; try { email = await sendMovementEmail(state, movement, asset); } catch(e){ email = { sent:false, reason:e.message }; }
-    return sendJson(res, 200, { state: publicState(state, user.role === "main"), movement, asset, email });
+    return sendJson(res, 200, { state: publicState(state, user.role === "main"), movement, asset });
   }
   if (req.method === "POST" && url.pathname === "/api/batch-checkout") {
     const ctx = requireUser(req, res, ["main","admin","storeman"]); if (!ctx) return;
@@ -298,8 +289,7 @@ async function handleApi(req, res, url) {
       return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, assetNumber: asset.assetNumber, toolName: asset.name, type: "checkout", person, loginUser: user.email, notes: body.notes || "", timestamp };
     });
     state.history = [...movements, ...(state.history || [])]; writeState(state);
-    let email = { sent:false, reason:"Email not attempted" }; try { email = await sendBatchCheckoutEmail(state, movements, assets, person, body.notes || ""); } catch(e){ email = { sent:false, reason:e.message }; }
-    return sendJson(res, 200, { state: publicState(state, user.role === "main"), movements, assets, email });
+    return sendJson(res, 200, { state: publicState(state, user.role === "main"), movements, assets });
   }
   if (req.method === "POST" && url.pathname === "/api/admin/state") {
     const ctx = requireUser(req, res, ["main","admin"]); if (!ctx) return;
@@ -313,6 +303,18 @@ async function handleApi(req, res, url) {
     const body = await readBody(req); const state = ctx.state;
     state.settings = normaliseSettings({ ...(state.settings || {}), foremanEmails: body.foremanEmails || "", siteName: body.siteName || "Jundee", workers: body.workers || state.settings.workers, users: ctx.user.role === "main" && Array.isArray(body.users) ? body.users : state.settings.users });
     writeState(state); return sendJson(res, 200, { state: publicState(state, ctx.user.role === "main") });
+  }
+  if (req.method === "POST" && url.pathname === "/api/admin/test-email") {
+    const ctx = requireUser(req, res, ["main","admin"]); if (!ctx) return;
+    const body = await readBody(req); const state = ctx.state;
+    state.settings = normaliseSettings({ ...(state.settings || {}), foremanEmails: body.foremanEmails ?? state.settings.foremanEmails, siteName: body.siteName || state.settings.siteName });
+    try {
+      const result = await sendTestEmail(state, ctx.user);
+      if (!result.sent) return sendJson(res, 400, { error: result.reason });
+      return sendJson(res, 200, result);
+    } catch(e) {
+      return sendJson(res, 500, { error: e.message });
+    }
   }
   sendJson(res, 404, { error:"Not found" });
 }

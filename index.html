@@ -134,7 +134,11 @@
               Approved borrowers <span id="workerCount" class="worker-count"></span>
               <textarea id="workersList" placeholder="One approved worker per line"></textarea>
             </label>
-            <button type="submit">Save settings</button>
+            <div class="button-row">
+              <button type="submit">Save settings</button>
+              <button id="testEmailButton" type="button" class="secondary">Send test email</button>
+            </div>
+            <div id="testEmailMessage" class="login-message"></div>
           </form>
           <form id="usersForm" class="panel inset main-only" hidden>
             <h3>Logins</h3>

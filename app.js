@@ -25,7 +25,7 @@ const state = loadState();
 const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
-  ["loginScreen","appShell","loginForm","loginEmail","loginPassword","loginMessage","currentUser","logoutButton","pinToggle","pinPanel","pinForm","currentPin","newPin","confirmPin","pinMessage","pinBackButton","adminToggle","adminPanel","adminBackButton","assetForm","settingsForm","usersForm","checkoutForm","assetTable","historyList","assetLookup","lookupResult","personName","movementNotes","scannerStatus","scannerVideo","searchBox","foremanEmails","siteName","workerList","workersList","workerCount","usersList","labelSheet","scanButton","addToBatchButton","batchList","batchCheckoutButton","clearBatchButton","returnButton","repairButton","sampleData","printLabels","exportData","importData","clearHistory","filterAll","filterAvailable","filterOut","filterRepair"].forEach(id => els[id] = document.querySelector(`#${id}`));
+  ["loginScreen","appShell","loginForm","loginEmail","loginPassword","loginMessage","currentUser","logoutButton","pinToggle","pinPanel","pinForm","currentPin","newPin","confirmPin","pinMessage","pinBackButton","adminToggle","adminPanel","adminBackButton","assetForm","settingsForm","usersForm","checkoutForm","assetTable","historyList","assetLookup","lookupResult","personName","movementNotes","scannerStatus","scannerVideo","searchBox","foremanEmails","siteName","workerList","workersList","workerCount","usersList","testEmailButton","testEmailMessage","labelSheet","scanButton","addToBatchButton","batchList","batchCheckoutButton","clearBatchButton","returnButton","repairButton","sampleData","printLabels","exportData","importData","clearHistory","filterAll","filterAvailable","filterOut","filterRepair"].forEach(id => els[id] = document.querySelector(`#${id}`));
   bindEvents();
   restoreLogin();
   render();
@@ -41,6 +41,7 @@ function bindEvents() {
   els.adminBackButton.addEventListener("click", () => { els.adminPanel.hidden = true; });
   els.assetForm.addEventListener("submit", saveAsset);
   els.settingsForm.addEventListener("submit", saveSettings);
+  els.testEmailButton.addEventListener("click", sendTestEmail);
   els.usersForm.addEventListener("submit", saveUsers);
   els.checkoutForm.addEventListener("submit", e => { e.preventDefault(); moveAsset("checkout"); });
   els.addToBatchButton.addEventListener("click", addCurrentLookupToBatch);
@@ -136,6 +137,23 @@ async function saveUsers(event) {
   try { if (IS_SERVER) { const r = await fetch("/api/admin/settings", { method:"POST", headers: authHeaders(), body: JSON.stringify({ foremanEmails:state.settings.foremanEmails, siteName:state.settings.siteName, workers:state.settings.workers, users:state.settings.users }) }); const p = await r.json(); if (!r.ok) throw new Error(p.error || "Login save failed"); applyServerState(p.state); } render(); } catch(e){ alert(e.message); }
 }
 
+async function sendTestEmail() {
+  if (!isAdminLevel()) return;
+  els.testEmailMessage.textContent = "Sending test email...";
+  if (!IS_SERVER) {
+    els.testEmailMessage.textContent = "Test email only works on the Render website.";
+    return;
+  }
+  try {
+    const r = await fetch("/api/admin/test-email", { method:"POST", headers: authHeaders(), body: JSON.stringify({ foremanEmails: els.foremanEmails.value.trim(), siteName: els.siteName.value.trim() || "Jundee" }) });
+    const p = await r.json();
+    if (!r.ok) throw new Error(p.error || "Test email failed");
+    els.testEmailMessage.textContent = `Test email sent to ${p.recipients} recipient(s).`;
+  } catch(e) {
+    els.testEmailMessage.textContent = e.message;
+  }
+}
+
 async function changePin(event) {
   event.preventDefault();
   const currentPin = els.currentPin.value.trim();
@@ -190,7 +208,7 @@ async function moveAsset(type) {
   if (IS_SERVER) {
     try {
       const r = await fetch("/api/move", { method:"POST", headers: authHeaders(), body: JSON.stringify({ type, lookup, assetId: asset.id, person, notes: els.movementNotes.value.trim() }) }); const p = await r.json(); if (!r.ok) throw new Error(p.error || "Movement failed");
-      applyServerState(p.state); els.personName.value = ""; els.movementNotes.value = ""; render(); setLookupMessage(`${formatLookup(p.asset)}<br><span class="duplicate-note">${p.email?.sent ? "Foreman email sent." : "Foreman email not sent: " + (p.email?.reason || "not configured")}</span>`);
+      applyServerState(p.state); els.personName.value = ""; els.movementNotes.value = ""; render(); setLookupMessage(formatLookup(p.asset));
     } catch(e){ setLookupMessage(escapeHtml(e.message)); }
     return;
   }
@@ -250,7 +268,7 @@ async function batchCheckout() {
       const p = await r.json();
       if (!r.ok) throw new Error(p.error || "Batch checkout failed");
       applyServerState(p.state);
-      setLookupMessage(`<strong>${assets.length}</strong> tool(s) logged out to ${escapeHtml(person)}.<br><span class="duplicate-note">${p.email?.sent ? "Foreman email sent." : "Foreman email not sent: " + (p.email?.reason || "not configured")}</span>`);
+      setLookupMessage(`<strong>${assets.length}</strong> tool(s) logged out to ${escapeHtml(person)}.`);
       batchAssetIds = [];
       els.personName.value = "";
       els.movementNotes.value = "";
