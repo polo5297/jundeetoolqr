@@ -25,7 +25,7 @@ const state = loadState();
 const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
-  ["loginScreen","appShell","loginForm","loginEmail","loginPassword","loginMessage","currentUser","logoutButton","pinToggle","pinPanel","pinForm","currentPin","newPin","confirmPin","pinMessage","pinBackButton","adminToggle","adminPanel","adminBackButton","assetForm","settingsForm","usersForm","checkoutForm","assetTable","historyList","assetLookup","lookupResult","personName","movementNotes","scannerStatus","scannerVideo","searchBox","foremanEmails","siteName","workerList","workersList","workerCount","usersList","testEmailButton","testEmailMessage","labelSheet","scanButton","addToBatchButton","batchList","batchCheckoutButton","clearBatchButton","returnButton","repairButton","sampleData","printLabels","exportData","importData","clearHistory","filterAll","filterAvailable","filterOut","filterRepair"].forEach(id => els[id] = document.querySelector(`#${id}`));
+  ["loginScreen","appShell","loginForm","loginEmail","loginPassword","loginMessage","currentUser","logoutButton","pinToggle","pinPanel","pinForm","currentPin","newPin","confirmPin","pinMessage","pinBackButton","adminToggle","adminPanel","adminBackButton","assetForm","settingsForm","usersForm","checkoutForm","assetTable","historyList","assetLookup","lookupResult","personName","workerSelect","movementNotes","scannerStatus","scannerVideo","searchBox","foremanEmails","siteName","workersList","workerCount","usersList","testEmailButton","testEmailMessage","labelSheet","scanButton","addToBatchButton","batchList","batchCheckoutButton","clearBatchButton","returnButton","repairButton","sampleData","printLabels","exportData","importData","clearHistory","filterAll","filterAvailable","filterOut","filterRepair"].forEach(id => els[id] = document.querySelector(`#${id}`));
   bindEvents();
   restoreLogin();
   render();
@@ -57,6 +57,10 @@ function bindEvents() {
   els.clearHistory.addEventListener("click", clearHistory);
   els.searchBox.addEventListener("input", renderAssets);
   els.assetLookup.addEventListener("input", updateLookup);
+  els.personName.addEventListener("input", renderWorkers);
+  els.workerSelect.addEventListener("change", () => {
+    els.personName.value = els.workerSelect.value;
+  });
   [els.filterAll, els.filterAvailable, els.filterOut, els.filterRepair].forEach(button => {
     button.addEventListener("click", () => {
       activeStatusFilter = button.dataset.filter;
@@ -308,7 +312,13 @@ function render() {
   els.foremanEmails.value = state.settings.foremanEmails || ""; els.siteName.value = state.settings.siteName || "Jundee"; els.workersList.value = (state.settings.workers || []).join("\n"); els.workerCount.textContent = `(${(state.settings.workers || []).length})`; els.usersList.value = usersToText(state.settings.users || DEFAULT_USERS);
   renderWorkers(); renderBatch(); renderAssets(); renderHistory(); updateLookup();
 }
-function renderWorkers() { els.workerList.innerHTML = (state.settings.workers || []).map(w => `<option value="${escapeHtml(w)}"></option>`).join(""); }
+function renderWorkers() {
+  const current = els.workerSelect.value;
+  const typed = els.personName.value.trim().toLowerCase();
+  const workers = (state.settings.workers || []).filter(worker => !typed || worker.toLowerCase().includes(typed)).slice(0, 80);
+  els.workerSelect.innerHTML = `<option value="">Select approved worker</option>` + workers.map(worker => `<option value="${escapeHtml(worker)}">${escapeHtml(worker)}</option>`).join("");
+  if (workers.includes(current)) els.workerSelect.value = current;
+}
 function renderBatch() {
   const assets = batchAssetIds.map(id => state.assets.find(asset => asset.id === id)).filter(Boolean);
   batchAssetIds = assets.map(asset => asset.id);

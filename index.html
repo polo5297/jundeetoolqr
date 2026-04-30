@@ -89,8 +89,10 @@
           <div class="lookup-result" id="lookupResult">Select a tool to log it out, return it, or mark it out for repair.</div>
           <label>
             Person
-            <input id="personName" list="workerList" autocomplete="off" placeholder="Start typing approved worker name">
-            <datalist id="workerList"></datalist>
+            <input id="personName" autocomplete="off" placeholder="Search approved worker name">
+            <select id="workerSelect">
+              <option value="">Select approved worker</option>
+            </select>
           </label>
           <label>
             Notes
